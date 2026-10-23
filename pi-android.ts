@@ -825,6 +825,10 @@ function createAndroidTaskTool(pi: ExtensionAPI, gate: DeviceGate): ToolDefiniti
 
 			const reportText = formatRunReport(run.report, { modelLabel, thinkingLevel });
 			const notes: string[] = [];
+			if (thinkingLevel !== CHILD_THINKING_LEVEL) {
+				// Clamping is silent otherwise: say so instead of letting the header confuse.
+				notes.push(`Model ${modelLabel} cannot run at thinking ${CHILD_THINKING_LEVEL}; this run used ${thinkingLevel}.`);
+			}
 			if (!vision) notes.push(`Model ${modelLabel} does not accept images: screenshots arrived as placeholders, so the operator worked from OCR text.`);
 			const text = [
 				pendingLate ? `Late outcome of a previous android_task:\n${pendingLate}` : "",

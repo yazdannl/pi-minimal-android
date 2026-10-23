@@ -127,7 +127,8 @@ caller verifies with `android_shot`, because a normal finish only means the chil
   the `android-task-late` entry + the next call's report carry the late outcome.
 - **Model.** Defaults to the caller's model but always runs at thinking level `low`: phone
   work is short mechanical sequences, and extra reasoning mostly buys turns and cost (models
-  without reasoning support clamp it to `off`). The model must be visible to a fresh Pi
+  without reasoning support clamp it to `off`, and a model that cannot do `low` shows the
+  level it actually used in the result notes). The model must be visible to a fresh Pi
   runtime (built-in providers and `models.json`; provider extensions and request hooks are
   not loaded), authenticated, and ideally image-capable - a text-only model gets screenshots
   as placeholders and works from OCR text. Use `model: "provider/model-id"` to override.
