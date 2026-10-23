@@ -110,6 +110,11 @@ The result contains the operator's own report, token/cost usage, a sanitized act
 names and safe fields only) and any side effects it recorded. **It is a report, not proof:** the
 caller verifies with `android_shot`, because a normal finish only means the child stopped.
 
+- **Short tasks.** Delegate one goal with a handful of actions at a time: a long flow is
+  several tasks, each starting from the screen the previous one left. Inside a task the
+  operator is told to batch every action it already knows into one `android_act` call (up to
+  20 steps, stopping at the first failure) instead of one call per tap, and to finish in as
+  few actions as possible.
 - **Isolation.** The child is a separate Pi session with its own system prompt. It gets none of
   the parent's tools, no `AGENTS.md`/project context, no skills, prompt templates, themes or
   other extensions, and its session is in-memory (nothing is written to the session picker).

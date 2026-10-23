@@ -147,6 +147,11 @@ test("parent registers android_task and android_shot only", { skip }, async () =
 
 		const task = tools.find((tool) => tool.name === "android_task");
 		const ctx = { cwd: dir, model: undefined };
+		assert.match(task.description, /short, focused tasks/);
+		assert.ok(
+			task.promptGuidelines.some((line) => /Keep each task short/.test(line)),
+			"the caller must be told to keep tasks short",
+		);
 		await assert.rejects(task.execute("id", { task: "   " }, undefined, undefined, ctx), /needs a task/);
 		await assert.rejects(
 			task.execute("id", { task: "x".repeat(8001) }, undefined, undefined, ctx),
@@ -206,6 +211,15 @@ test("the child session has exactly the nine operator tools, our prompt and no p
 			assert.match(session.systemPrompt, /untrusted data/);
 			assert.match(session.systemPrompt, /Never reveal vault values/);
 			assert.equal(session.systemPrompt.includes(AGENTS_MARKER), false, "project AGENTS.md leaked into the child prompt");
+			assert.match(session.systemPrompt, /Batch aggressively/);
+			assert.match(session.systemPrompt, /Keep it short/);
+			// A custom system prompt replaces the structured rules section, so tool
+			// promptGuidelines never reach the child: the batching rule must live in the
+			// tool description, which the model always gets.
+			const act = definitions.find((tool) => tool.name === "android_act");
+			assert.match(act.description, /Batch by default/);
+			assert.match(act.description, /steps/);
+			assert.equal(act.promptGuidelines, undefined);
 			assert.deepEqual(session.messages, []);
 			assert.equal(session.thinkingLevel, "low", "the child must default to thinking low");
 		} finally {

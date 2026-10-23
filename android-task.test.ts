@@ -416,6 +416,8 @@ test("the operator prompt carries the isolation and vault rules", () => {
 		"Only touch vault entries",
 		"close tabs",
 		"stop app=\"browser\"",
+		"batch aggressively",
+		"keep it short",
 		"Cannot ask questions".toLowerCase(),
 	]) {
 		assert.ok(ANDROID_OPERATOR_PROMPT.toLowerCase().includes(needle.toLowerCase()), `missing prompt clause: ${needle}`);
