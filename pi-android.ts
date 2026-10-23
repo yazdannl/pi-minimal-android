@@ -26,6 +26,7 @@ import { Type, type Static } from "typebox";
 import {
 	browse,
 	capture,
+	closeApp,
 	describeElement,
 	forceStop,
 	key,
@@ -52,6 +53,7 @@ import {
 	createDeviceGate,
 	createEffectLog,
 	describeActStep,
+	describeApp,
 	describeLabel,
 	formatRunReport,
 	MAX_TASK_CHARS,
@@ -249,7 +251,7 @@ async function runStep(step: Step, signal?: AbortSignal): Promise<string> {
 			return await launch(step.app);
 		}
 		case "stop": {
-			if (!step.app) throw new Error('stop needs app (or "browser")');
+			if (!step.app) throw new Error('stop needs app (or "browser"); android_close closes the app on screen without one');
 			return await forceStop(step.app);
 		}
 		default:
@@ -335,6 +337,32 @@ function createAndroidActTool(onCommit?: (line: string) => void): ToolDefinition
 			details: batched ? { steps: plan.length } : undefined,
 		};
 	},
+	});
+}
+
+/** Close an app for real; the cleanup step of a task gets its own tool instead of android_act stop. */
+function createAndroidCloseTool(onCommit?: (line: string) => void): ToolDefinition {
+	return defineTool({
+		name: "android_close",
+		label: "Android close",
+		description:
+			"Close an app completely: force-stops its process (background services and notifications stop with it) and reports what is in front afterwards. Without `app` it closes whatever is on screen, so `android_close({})` is the cleanup step after a task; `app: \"browser\"` resolves the default browser instead of a hardcoded package, and any package name or unambiguous fragment works. Refuses to close the home screen or system UI, and reports when the process refused to die. Prefer it over android_act stop whenever the point of the call is to clean up.",
+		promptSnippet: "Close an app fully (force-stop), defaulting to the app on screen",
+		parameters: Type.Object({
+			app: Type.Optional(
+				Type.String({
+					description: 'Package name, unique package fragment, or "browser"; default: the app currently on screen',
+				}),
+			),
+		}),
+		executionMode: "sequential",
+		async execute(_id, params, signal) {
+			throwIfAborted(signal);
+			const result = await closeApp(params.app);
+			throwIfAborted(signal);
+			onCommit?.(`android_close ${params.app ? describeApp(params.app) : "focused"}`);
+			return { content: [{ type: "text", text: result }], details: undefined };
+		},
 	});
 }
 
@@ -592,6 +620,7 @@ export function childToolDefinitions(gate: DeviceGate, lease: DeviceLease, effec
 		androidUi,
 		androidShot,
 		createAndroidActTool((line) => effects.record(line)),
+		createAndroidCloseTool((line) => effects.record(line)),
 		androidBrowse,
 		androidRead,
 		...createVaultTools(effects, policy),

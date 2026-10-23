@@ -8,6 +8,7 @@ import {
 	mergeElements,
 	deviceToImage,
 	imageToDevice,
+	isProtectedApp,
 	normalizeUrl,
 	optimizeShot,
 	parseAwake,
@@ -291,4 +292,22 @@ test("live device round-trip", { skip: !LIVE }, async () => {
 
 	// tap the clock area (harmless) and confirm the element list still reads
 	await import("./android.ts").then((ad) => ad.tap(Math.round(state.size[0] / 2), 20));
+});
+
+test("cleanup refuses to close every real home screen, but not Settings", () => {
+	// Exactly what this device reports (resolve-activity finds no preferred home here).
+	const homes = [
+		"com.android.launcher3/.uioverrides.QuickstepLauncher",
+		"app.olauncher.stats.debug/app.olauncher.MainActivity",
+		"com.android.settings/.FallbackHome",
+	];
+	assert.equal(isProtectedApp("app.olauncher.stats.debug", homes), true);
+	assert.equal(isProtectedApp("com.android.launcher3", homes), true);
+	assert.equal(isProtectedApp("com.android.systemui", homes), true);
+	assert.equal(isProtectedApp("android", homes), true);
+	// FallbackHome is a boot placeholder, not a reason to protect all of Settings.
+	assert.equal(isProtectedApp("com.android.settings", homes), false);
+	assert.equal(isProtectedApp("de.baumann.browser", homes), false);
+	// No home information at all: only system processes are protected.
+	assert.equal(isProtectedApp("app.olauncher.stats.debug", []), false);
 });

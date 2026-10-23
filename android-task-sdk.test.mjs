@@ -166,7 +166,7 @@ test("parent registers android_task and android_shot only", { skip }, async () =
 	}
 });
 
-test("the child session has exactly the nine operator tools, our prompt and no project context", { skip }, async () => {
+test("the child session has exactly its operator tools, our prompt and no project context", { skip }, async () => {
 	const dir = await stage();
 	try {
 		const mod = await import(pathToFileURL(join(dir, "pi-android.ts")).href);
@@ -196,6 +196,7 @@ test("the child session has exactly the nine operator tools, our prompt and no p
 			assert.deepEqual(session.getActiveToolNames().sort(), [
 				"android_act",
 				"android_browse",
+				"android_close",
 				"android_read",
 				"android_shot",
 				"android_ui",
@@ -212,6 +213,7 @@ test("the child session has exactly the nine operator tools, our prompt and no p
 			assert.match(session.systemPrompt, /Never reveal vault values/);
 			assert.equal(session.systemPrompt.includes(AGENTS_MARKER), false, "project AGENTS.md leaked into the child prompt");
 			assert.match(session.systemPrompt, /Batch aggressively/);
+			assert.match(session.systemPrompt, /Clean up at the end with android_close/);
 			assert.match(session.systemPrompt, /Keep it short/);
 			// A custom system prompt replaces the structured rules section, so tool
 			// promptGuidelines never reach the child: the batching rule must live in the
@@ -220,6 +222,10 @@ test("the child session has exactly the nine operator tools, our prompt and no p
 			assert.match(act.description, /Batch by default/);
 			assert.match(act.description, /steps/);
 			assert.equal(act.promptGuidelines, undefined);
+			const close = definitions.find((tool) => tool.name === "android_close");
+			assert.match(close.description, /force-stops its process/);
+			assert.match(close.description, /cleanup step/);
+			assert.equal(close.executionMode, "sequential");
 			assert.deepEqual(session.messages, []);
 			assert.equal(session.thinkingLevel, "low", "the child must default to thinking low");
 		} finally {

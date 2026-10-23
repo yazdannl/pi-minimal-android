@@ -162,6 +162,13 @@ test("tool call metadata excludes typed text, URLs and arguments", () => {
 	assert.ok(!step.includes("visible"));
 });
 
+test("android_close metadata names the app or says it targeted the screen", () => {
+	assert.equal(describeToolCall("android_close", {}), "android_close app=focused");
+	assert.equal(describeToolCall("android_close", { app: "browser" }), "android_close app=browser");
+	assert.equal(describeToolCall("android_close", { app: "com.android.settings" }), "android_close app=com.android.settings");
+	assert.equal(describeToolCall("android_close", { app: "https://secret.example/a?token=1" }), "android_close app=url-host:secret.example");
+});
+
 test("collectActions walks tool calls in order and ignores results", () => {
 	assert.deepEqual(collectActions(finishedMessages), ["android_ui nodes=true max=60", "android_act tap target=text(21 chars)"]);
 	assert.deepEqual(collectActions([]), []);
@@ -415,7 +422,7 @@ test("the operator prompt carries the isolation and vault rules", () => {
 		"Never reveal vault values",
 		"Only touch vault entries",
 		"close tabs",
-		"stop app=\"browser\"",
+		"clean up at the end with android_close",
 		"batch aggressively",
 		"keep it short",
 		"Cannot ask questions".toLowerCase(),

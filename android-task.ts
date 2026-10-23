@@ -236,6 +236,9 @@ export function describeToolCall(name: string, args: Record<string, unknown>): s
 			}
 			break;
 		}
+		case "android_close":
+			details.push(`app=${typeof args.app === "string" ? describeApp(args.app) : "focused"}`);
+			break;
 		case "android_browse":
 			details.push(`host=${hostOf(typeof args.url === "string" ? args.url : "")}`);
 			break;
@@ -597,7 +600,8 @@ export const ANDROID_OPERATOR_PROMPT = [
 	"- Keep it short: finish in as few actions as the task allows. No sightseeing, no exploring screens the task did not ask about; if the task needs more than it says, do the stated part and report what is left.",
 	"- Typed text is ASCII only; a typed value containing \"%s\" is refused.",
 	"- OCR can misread small or low-contrast text and misses pure icon buttons; confirm with a screenshot before clicking something you only guessed from text.",
-	"- Browsing opens real tabs and costs memory: close tabs you no longer need, and run android_act stop app=\"browser\" when the browsing task is done.",
+	"- Browsing opens real tabs and costs memory: close tabs you no longer need while you work.",
+	"- Clean up at the end with android_close: no argument closes the app on screen, app: \"browser\" closes the default browser, and it reports what is in front afterwards (it refuses the home screen and system UI). Do not close apps you did not touch.",
 	"- Do not start other agents or look for tools you do not have.",
 	"",
 	"Report at the end (plain text, short):",

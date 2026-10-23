@@ -17,6 +17,7 @@ else:
 android_ui      list elements: every visible text line with its tap point, plus view ids
 android_shot    screenshot as a compressed image (half size, palette PNG by default)
 android_act     tap / longpress / swipe / scroll / type / key / launch / stop (single or batched `steps`)
+android_close   close an app fully (force-stop, verified), defaulting to the app on screen
 android_browse  open a URL in the browser and return the loaded page text
 android_read    plain text of the current screen (no coordinates)
 vault_list      stored logins: label, site, username (never the password)
@@ -88,6 +89,13 @@ android_read({ maxChars? })   # text only, cheap way to read a long page
 
 `target` resolves against the last `android_ui` call: a number is an element index, text is a
 case-insensitive match that must be unique, `x,y` is raw coordinates.
+
+`android_close({})` closes whatever is in front, which is the cleanup step at the end of a task;
+`android_close({ app: "browser" })` closes the current default browser, and any package name or
+unambiguous fragment works too. It force-stops the process, verifies with `pidof` that the app is
+really gone (and says so when it is not), reports the new foreground app, and refuses to close the
+home screen or system UI. `android_act` still has a `stop` action for batched sequences; the rule
+is that cleanup is an `android_close` call, not a step in the middle of a flow.
 
 ## Delegating: android_task
 

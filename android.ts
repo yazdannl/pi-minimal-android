@@ -767,38 +767,104 @@ export async function resolveActivity(app: string): Promise<string> {
 	return component;
 }
 
+/** Turn an app argument into a package name: "browser", an exact/fragment match, or a package. */
+export async function resolvePackage(app: string): Promise<string> {
+	const wanted = app.trim();
+	if (!wanted) throw new Error("an app name, a package or \"browser\" is required");
+	if (/^browser$/i.test(wanted)) return defaultBrowser();
+	if (/^[a-z][\w]*(\.[\w]+)+$/i.test(wanted)) return wanted;
+	const packages = (await dev("pm", "list", "packages")).split("\n").map((line) => line.replace("package:", "").trim());
+	const exact = packages.find((name) => name.toLowerCase() === wanted.toLowerCase());
+	const hits = exact
+		? [exact]
+		: packages
+				.filter((name) => name.toLowerCase().includes(wanted.toLowerCase()))
+				.filter((name) => !name.includes("auto_generated_rro"));
+	if (hits.length !== 1) {
+		throw new Error(
+			hits.length
+				? `"${wanted}" is ambiguous: ${hits.slice(0, 8).join(", ")}`
+				: `No installed package matches "${wanted}". Use android_ui or pm list packages.`,
+		);
+	}
+	return hits[0];
+}
+
 export async function launch(app: string): Promise<string> {
 	if (/^https?:\/\//i.test(app)) {
 		return dev("am", "start", "-a", "android.intent.action.VIEW", "-d", app);
 	}
-	let pkg = app;
-	if (!/^[a-z][\w]*(\.[\w]+)+$/i.test(pkg)) {
-		const packages = (await dev("pm", "list", "packages")).split("\n").map((line) => line.replace("package:", "").trim());
-		const exact = packages.find((name) => name.toLowerCase() === pkg.toLowerCase());
-		const hits = exact
-			? [exact]
-			: packages
-					.filter((name) => name.toLowerCase().includes(pkg.toLowerCase()))
-					.filter((name) => !name.includes("auto_generated_rro"));
-		if (hits.length !== 1) {
-			throw new Error(
-				hits.length
-					? `"${app}" is ambiguous: ${hits.slice(0, 8).join(", ")}`
-					: `No installed package matches "${app}". Use android_ui or pm list packages.`,
-			);
-		}
-		pkg = hits[0];
-	}
-	const component = await resolveActivity(pkg);
+	const component = await resolveActivity(await resolvePackage(app));
 	const out = await dev("am", "start", "-W", "-n", component);
 	if (/Error|Exception/.test(out)) throw new Error(out.trim());
 	return `launched ${component}`;
 }
 
 export async function forceStop(app: string): Promise<string> {
-	const target = /^browser$/i.test(app) ? await defaultBrowser() : app;
+	const target = await resolvePackage(app);
 	await dev("am", "force-stop", target);
 	return `stopped ${target}`;
+}
+
+/**
+ * Packages a cleanup call must never force-stop: system processes and every real home
+ * screen. `com.android.settings/.FallbackHome` is excluded - it is a boot placeholder, and
+ * Settings is a normal thing to close.
+ */
+export function isProtectedApp(pkg: string, homes: readonly string[]): boolean {
+	if (/^(android|com\.android\.systemui)$/i.test(pkg)) return true;
+	return homes.some((entry) => {
+		const [owner, activity] = entry.split("/");
+		return owner?.toLowerCase() === pkg.toLowerCase() && !/FallbackHome/i.test(activity ?? "");
+	});
+}
+
+let cachedHomes: string[] | null = null;
+
+/**
+ * Every activity registered for the HOME category. `resolve-activity` only returns a
+ * preferred one and fails outright on this device, so ask for the full list.
+ */
+export async function homeActivities(): Promise<string[]> {
+	if (cachedHomes) return cachedHomes;
+	try {
+		const out = await dev("cmd", "package", "query-activities", "--brief", "-a", "android.intent.action.MAIN", "-c", "android.intent.category.HOME");
+		cachedHomes = out
+			.split("\n")
+			.map((line) => line.trim())
+			.filter((line) => /^[A-Za-z][\w]*(\.[\w]+)+\/[\w.$]+/.test(line));
+	} catch {
+		cachedHomes = [];
+	}
+	return cachedHomes;
+}
+
+async function isRunning(pkg: string): Promise<boolean> {
+	try {
+		return (await dev("pidof", pkg)).trim().length > 0;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Close an app for real: force-stop it (process, services, notifications) and verify the
+ * process is gone. Defaults to the app in front, which is what cleanup means after a task.
+ */
+export async function closeApp(app?: string): Promise<string> {
+	const wanted = app?.trim();
+	const target = wanted ? await resolvePackage(wanted) : (await screenState()).app;
+	if (!target) throw new Error("nothing is in front to close; pass app or \"browser\"");
+	if (isProtectedApp(target, await homeActivities())) {
+		throw new Error(`refusing to close ${target}: it is the home screen or a system UI process; name the app to close instead`);
+	}
+	const wasRunning = await isRunning(target);
+	await dev("am", "force-stop", target);
+	const stillRunning = await isRunning(target);
+	lastSnapshot = null;
+	const after = await screenState();
+	const notes = [!wasRunning && "(was not running)", stillRunning && "but its process is still alive"].filter(Boolean);
+	return `closed ${target}${notes.length ? ` ${notes.join(" ")}` : ""}; focused ${after.activity}`;
 }
 
 /** Package name of the current default `VIEW https://` handler, so callers never hardcode a browser. */
