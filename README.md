@@ -120,8 +120,10 @@ caller verifies with `android_shot`, because a normal finish only means the chil
   polling are interruptible, and vault writes check after every await. Ownership of the device
   is only released after the session is confirmed idle; until then other calls fail fast and
   the `android-task-late` entry + the next call's report carry the late outcome.
-- **Model.** Defaults to the caller's model and thinking level. It must be visible to a fresh
-  Pi runtime (built-in providers and `models.json`; provider extensions and request hooks are
+- **Model.** Defaults to the caller's model but always runs at thinking level `low`: phone
+  work is short mechanical sequences, and extra reasoning mostly buys turns and cost (models
+  without reasoning support clamp it to `off`). The model must be visible to a fresh Pi
+  runtime (built-in providers and `models.json`; provider extensions and request hooks are
   not loaded), authenticated, and ideally image-capable - a text-only model gets screenshots
   as placeholders and works from OCR text. Use `model: "provider/model-id"` to override.
 - **Vault.** Fill is denied unless `vaultLabels` names the entry, and generate/rotate/remove

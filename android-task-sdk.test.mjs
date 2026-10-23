@@ -176,7 +176,7 @@ test("the child session has exactly the nine operator tools, our prompt and no p
 			provider: "stub",
 			baseUrl: "http://127.0.0.1:9",
 			input: ["text"],
-			reasoning: false,
+			reasoning: true,
 			contextWindow: 10_000,
 			maxTokens: 1_000,
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
@@ -185,7 +185,6 @@ test("the child session has exactly the nine operator tools, our prompt and no p
 			cwd: dir,
 			agentDir: join(dir, "agent"),
 			model,
-			thinkingLevel: "medium",
 			tools: definitions,
 		});
 		try {
@@ -208,6 +207,7 @@ test("the child session has exactly the nine operator tools, our prompt and no p
 			assert.match(session.systemPrompt, /Never reveal vault values/);
 			assert.equal(session.systemPrompt.includes(AGENTS_MARKER), false, "project AGENTS.md leaked into the child prompt");
 			assert.deepEqual(session.messages, []);
+			assert.equal(session.thinkingLevel, "low", "the child must default to thinking low");
 		} finally {
 			session.dispose();
 			gate.endTask(lease);

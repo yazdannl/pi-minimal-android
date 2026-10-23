@@ -615,13 +615,6 @@ export interface AndroidSubagentSessionOptions {
  */
 export async function createAndroidSubagentSession(options: AndroidSubagentSessionOptions) {
 	const settingsManager = SettingsManager.create(options.cwd, options.agentDir);
-	settingsManager.applyOverrides({
-		defaultThinkingLevel: options.thinkingLevel ?? "medium",
-		cacheWarming: "off",
-		compaction: { enabled: false },
-		retry: { enabled: false, provider: { maxRetries: 0 } },
-		...(options.blockImages ? { images: { blockImages: true } } : {}),
-	});
 	const resourceLoader = new DefaultResourceLoader({
 		cwd: options.cwd,
 		agentDir: options.agentDir,
@@ -635,6 +628,14 @@ export async function createAndroidSubagentSession(options: AndroidSubagentSessi
 		appendSystemPrompt: [],
 	});
 	await resourceLoader.reload();
+	// After reload(), not before: the loader re-reads settings and would drop these overrides.
+	settingsManager.applyOverrides({
+		defaultThinkingLevel: options.thinkingLevel ?? CHILD_THINKING_LEVEL,
+		cacheWarming: "off",
+		compaction: { enabled: false },
+		retry: { enabled: false, provider: { maxRetries: 0 } },
+		...(options.blockImages ? { images: { blockImages: true } } : {}),
+	});
 	const modelRuntime =
 		options.modelRuntime ??
 		(await ModelRuntime.create({
@@ -683,6 +684,13 @@ function resolveChildModel(runtime: ModelRuntime, ctx: ExtensionContext, request
 	return model;
 }
 
+/**
+ * The child always thinks at "low": it does short, mechanical sequences (look, tap, type,
+ * verify) where extra reasoning buys little and costs turns and money. Models without
+ * reasoning support clamp this to "off".
+ */
+const CHILD_THINKING_LEVEL: ModelThinkingLevel = "low";
+
 /** Late outcomes of runs that outlived their tool result, shown on the next call. */
 let lateOutcome: string | null = null;
 
@@ -697,7 +705,7 @@ function createAndroidTaskTool(pi: ExtensionAPI, gate: DeviceGate): ToolDefiniti
 			"State persists on the device between calls, so a follow-up task can continue from the current screen, but the subagent starts fresh each time: tell it what the screen should show and what to report.",
 			"It returns the operator's report, sanitized action metadata, committed side effects and token/cost usage. Success is what the report and a follow-up android_shot show, not a promise of this tool.",
 			"Vault access is denied unless the task authorizes it: pass vaultLabels for fills and allowVaultWrite for create/rotate/delete. Destination authenticity of a fill is not verified in code.",
-			"This runs a real model session and may incur cost. Do not retry a failed task blindly; report the failure or delegate a different task.",
+			"It always runs at thinking level low (cheap and quick) on the current model. This runs a real model session and may incur cost. Do not retry a failed task blindly; report the failure or delegate a different task.",
 		].join(" "),
 		promptSnippet: "Delegate a whole task to an isolated Android operator subagent",
 		promptGuidelines: [
@@ -761,7 +769,7 @@ function createAndroidTaskTool(pi: ExtensionAPI, gate: DeviceGate): ToolDefiniti
 					agentDir: getAgentDir(),
 					modelRuntime,
 					model,
-					thinkingLevel: ctx.thinkingLevel,
+					thinkingLevel: CHILD_THINKING_LEVEL,
 					tools: childToolDefinitions(gate, lease, effects, {
 						labels: params.vaultLabels,
 						allowWrite: params.allowVaultWrite === true,
@@ -773,8 +781,9 @@ function createAndroidTaskTool(pi: ExtensionAPI, gate: DeviceGate): ToolDefiniti
 				throw cause;
 			}
 
+			const thinkingLevel = session.thinkingLevel;
 			const onLate = (late: RunReport) => {
-				lateOutcome = formatRunReport(late, { modelLabel, thinkingLevel: ctx.thinkingLevel, late: true });
+				lateOutcome = formatRunReport(late, { modelLabel, thinkingLevel, late: true });
 				try {
 					pi.appendEntry("android-task-late", {
 						model: modelLabel,
@@ -812,7 +821,7 @@ function createAndroidTaskTool(pi: ExtensionAPI, gate: DeviceGate): ToolDefiniti
 				throw cause;
 			}
 
-			const reportText = formatRunReport(run.report, { modelLabel, thinkingLevel: ctx.thinkingLevel });
+			const reportText = formatRunReport(run.report, { modelLabel, thinkingLevel });
 			const notes: string[] = [];
 			if (!vision) notes.push(`Model ${modelLabel} does not accept images: screenshots arrived as placeholders, so the operator worked from OCR text.`);
 			const text = [
